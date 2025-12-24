@@ -67,7 +67,7 @@ const App: React.FC = () => {
             <a href="#hero" className="hover:text-[#f39200] transition-colors">Vorbereitung</a>
             <a href="#concept" className="hover:text-[#f39200] transition-colors">Lernpost</a>
             <a href="#about" className="hover:text-[#f39200] transition-colors">Über Uns</a>
-            <span className="hover:text-[#f39200] cursor-pointer opacity-50">Blog (Coming Soon)</span>
+            <a href="#blog" className="hover:text-[#f39200] transition-colors">Blog</a>
             <a href="#pricing" className="text-[#f39200]">Preise</a>
           </nav>
 
