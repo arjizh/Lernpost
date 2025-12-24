@@ -20,6 +20,12 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
+    if (!supabase) {
+      setError('Supabase Konfiguration fehlt. Bitte Umgebungsvariablen setzen.');
+      setLoading(false);
+      return;
+    }
+
     const fetchSession = async () => {
       const { data, error: sessionError } = await supabase.auth.getSession();
       if (sessionError) {
@@ -48,6 +54,11 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const signIn = useCallback(async (email: string, password: string) => {
     setLoading(true);
     setError(null);
+    if (!supabase) {
+      setError('Supabase Konfiguration fehlt.');
+      setLoading(false);
+      return;
+    }
     const { error: signInError } = await supabase.auth.signInWithPassword({ email, password });
     if (signInError) {
       setError(signInError.message === 'Invalid login credentials' ? 'E-Mail oder Passwort stimmt nicht.' : 'Login fehlgeschlagen. Bitte später erneut versuchen.');
@@ -57,6 +68,11 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   const signOut = useCallback(async () => {
     setLoading(true);
+    if (!supabase) {
+      setError('Supabase Konfiguration fehlt.');
+      setLoading(false);
+      return;
+    }
     const { error: signOutError } = await supabase.auth.signOut();
     if (signOutError) {
       setError('Logout fehlgeschlagen.');
