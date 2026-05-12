@@ -1,0 +1,242 @@
+<!doctype html>
+<html lang="de">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <title>Diktat → Desktop</title>
+  <link rel="manifest" href="manifest.json" />
+  <link rel="icon" href="icon.svg" type="image/svg+xml" />
+  <meta name="theme-color" content="#0f172a" />
+  <style>
+    :root {
+      --bg: #0f172a;
+      --panel: #1e293b;
+      --panel-2: #334155;
+      --text: #f8fafc;
+      --muted: #94a3b8;
+      --accent: #22d3ee;
+      --accent-strong: #06b6d4;
+      --danger: #f43f5e;
+      --ok: #22c55e;
+    }
+    * { box-sizing: border-box; }
+    html, body { margin: 0; padding: 0; background: var(--bg); color: var(--text);
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      min-height: 100dvh; }
+    header { padding: 16px 16px 8px; font-size: 18px; font-weight: 600; }
+    main { padding: 0 16px 24px; display: flex; flex-direction: column; gap: 12px; }
+    .card { background: var(--panel); border-radius: 14px; padding: 12px; }
+    label { font-size: 13px; color: var(--muted); display: block; margin-bottom: 4px; }
+    input, textarea {
+      width: 100%; background: var(--panel-2); color: var(--text);
+      border: 1px solid transparent; border-radius: 10px; padding: 10px;
+      font-size: 16px; font-family: inherit;
+    }
+    input:focus, textarea:focus { outline: none; border-color: var(--accent); }
+    textarea { min-height: 200px; resize: vertical; }
+    .row { display: flex; gap: 8px; flex-wrap: wrap; }
+    button {
+      flex: 1 1 0; min-height: 52px; border: 0; border-radius: 12px;
+      background: var(--panel-2); color: var(--text); font-size: 16px; font-weight: 600;
+      display: inline-flex; align-items: center; justify-content: center; gap: 6px;
+    }
+    button.primary { background: var(--accent-strong); color: #052126; }
+    button.primary:active { background: var(--accent); }
+    button.danger { background: #4c1d24; color: #fda4af; }
+    button.recording { background: var(--danger); color: #fff; }
+    button:disabled { opacity: 0.5; }
+    .status { font-size: 14px; color: var(--muted); min-height: 20px; }
+    .status.ok { color: var(--ok); }
+    .status.err { color: var(--danger); }
+    details { background: var(--panel); border-radius: 14px; padding: 12px; }
+    details summary { cursor: pointer; font-weight: 600; }
+    details > div { margin-top: 10px; display: flex; flex-direction: column; gap: 10px; }
+    .hint { font-size: 12px; color: var(--muted); }
+    .pill { display: inline-block; padding: 2px 8px; border-radius: 999px;
+      background: var(--panel-2); font-size: 12px; color: var(--muted); }
+  </style>
+</head>
+<body>
+  <header>Diktat <span class="pill" id="topicPill">nicht konfiguriert</span></header>
+  <main>
+    <div class="card">
+      <label for="text">Text</label>
+      <textarea id="text" placeholder="Hier einfügen, diktieren oder per Teilen-Menü senden..."></textarea>
+      <div class="row" style="margin-top: 10px;">
+        <button id="send" class="primary">An Desktop senden</button>
+        <button id="dictate">🎤 Diktat</button>
+      </div>
+      <div class="row" style="margin-top: 8px;">
+        <button id="paste">Aus Zwischenablage</button>
+        <button id="clear" class="danger">Leeren</button>
+      </div>
+      <div id="status" class="status" style="margin-top: 8px;"></div>
+    </div>
+
+    <details id="settings">
+      <summary>Einstellungen</summary>
+      <div>
+        <div>
+          <label for="topic">Topic (muss exakt mit Desktop übereinstimmen)</label>
+          <input id="topic" autocomplete="off" autocapitalize="off" spellcheck="false" />
+        </div>
+        <div>
+          <label for="server">Server</label>
+          <input id="server" autocomplete="off" autocapitalize="off" spellcheck="false" />
+        </div>
+        <div>
+          <label for="lang">Diktat-Sprache</label>
+          <input id="lang" value="de-DE" autocomplete="off" />
+        </div>
+        <div class="row">
+          <button id="save" class="primary">Speichern</button>
+        </div>
+        <div class="hint">Topic ist quasi dein Geheimnis. Wähle einen langen, zufälligen Namen. Server-Standard: <code>https://ntfy.sh</code></div>
+      </div>
+    </details>
+
+    <details>
+      <summary>Hilfe</summary>
+      <div class="hint">
+        <p><b>Aus Claude senden:</b> Antwort in der Claude-App lange drücken → „Teilen" → diese PWA wählen. Text füllt sich automatisch, einmal „An Desktop senden" tippen.</p>
+        <p><b>Diktat:</b> Tippe 🎤 Diktat, sprich, nochmal tippen zum Stoppen. Funktioniert in Chrome auf Android.</p>
+        <p><b>Auf dem Desktop:</b> Listener läuft im Hintergrund. Cursor ins Befundfeld, dann <code>F9</code> drücken → letzter Empfang wird eingefügt.</p>
+      </div>
+    </details>
+  </main>
+
+  <script>
+    const els = {
+      text: document.getElementById('text'),
+      send: document.getElementById('send'),
+      dictate: document.getElementById('dictate'),
+      paste: document.getElementById('paste'),
+      clear: document.getElementById('clear'),
+      status: document.getElementById('status'),
+      topic: document.getElementById('topic'),
+      server: document.getElementById('server'),
+      lang: document.getElementById('lang'),
+      save: document.getElementById('save'),
+      settings: document.getElementById('settings'),
+      topicPill: document.getElementById('topicPill'),
+    };
+
+    const LS = {
+      get(k, d) { try { return localStorage.getItem(k) ?? d; } catch { return d; } },
+      set(k, v) { try { localStorage.setItem(k, v); } catch {} },
+    };
+
+    function loadConfig() {
+      els.topic.value = LS.get('topic', '');
+      els.server.value = LS.get('server', 'https://ntfy.sh');
+      els.lang.value = LS.get('lang', 'de-DE');
+      refreshPill();
+    }
+    function refreshPill() {
+      const t = (els.topic.value || '').trim();
+      els.topicPill.textContent = t ? t.length > 18 ? t.slice(0, 8) + '…' + t.slice(-6) : t : 'nicht konfiguriert';
+    }
+
+    function setStatus(msg, type = '') {
+      els.status.textContent = msg;
+      els.status.className = 'status' + (type ? ' ' + type : '');
+    }
+
+    function getQueryText() {
+      const p = new URLSearchParams(location.search);
+      return [p.get('text'), p.get('title'), p.get('url')].filter(Boolean).join('\n').trim();
+    }
+
+    async function send() {
+      const text = els.text.value.trim();
+      const topic = (LS.get('topic', '') || '').trim();
+      const server = (LS.get('server', 'https://ntfy.sh') || '').trim().replace(/\/+$/, '');
+      if (!topic) { setStatus('Bitte zuerst Topic in den Einstellungen setzen.', 'err'); els.settings.open = true; return; }
+      if (!text) { setStatus('Kein Text zum Senden.', 'err'); return; }
+      els.send.disabled = true;
+      setStatus('Sende...');
+      try {
+        const resp = await fetch(`${server}/${encodeURIComponent(topic)}`, {
+          method: 'POST',
+          body: text,
+          headers: { 'Content-Type': 'text/plain; charset=utf-8' },
+        });
+        if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+        setStatus(`Gesendet (${text.length} Zeichen). F9 am Desktop drücken.`, 'ok');
+      } catch (err) {
+        setStatus('Fehler: ' + err.message, 'err');
+      } finally {
+        els.send.disabled = false;
+      }
+    }
+
+    let recognition = null;
+    let recognizing = false;
+    function setupDictation() {
+      const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+      if (!SR) { els.dictate.disabled = true; els.dictate.textContent = '🎤 nicht unterstützt'; return; }
+      recognition = new SR();
+      recognition.continuous = true;
+      recognition.interimResults = true;
+      recognition.onstart = () => { recognizing = true; els.dictate.classList.add('recording'); els.dictate.textContent = '⏹ Stop'; };
+      recognition.onend = () => { recognizing = false; els.dictate.classList.remove('recording'); els.dictate.textContent = '🎤 Diktat'; };
+      recognition.onerror = (e) => setStatus('Diktat-Fehler: ' + e.error, 'err');
+      let baseText = '';
+      recognition.onresult = (e) => {
+        let finalChunk = '', interim = '';
+        for (let i = e.resultIndex; i < e.results.length; i++) {
+          const r = e.results[i];
+          if (r.isFinal) finalChunk += r[0].transcript;
+          else interim += r[0].transcript;
+        }
+        if (finalChunk) {
+          baseText = (baseText + ' ' + finalChunk).trim();
+          els.text.value = baseText;
+        } else {
+          els.text.value = (baseText + ' ' + interim).trim();
+        }
+      };
+      els.dictate.addEventListener('click', () => {
+        if (recognizing) { recognition.stop(); return; }
+        baseText = els.text.value.trim();
+        recognition.lang = (els.lang.value || 'de-DE').trim();
+        try { recognition.start(); } catch (err) { setStatus('Diktat-Start fehlgeschlagen: ' + err.message, 'err'); }
+      });
+    }
+
+    function bind() {
+      els.send.addEventListener('click', send);
+      els.paste.addEventListener('click', async () => {
+        try {
+          const t = await navigator.clipboard.readText();
+          if (t) { els.text.value = t; setStatus(`Eingefügt (${t.length} Zeichen).`, 'ok'); }
+        } catch (err) { setStatus('Zwischenablage nicht zugänglich: ' + err.message, 'err'); }
+      });
+      els.clear.addEventListener('click', () => { els.text.value = ''; setStatus(''); });
+      els.save.addEventListener('click', () => {
+        LS.set('topic', els.topic.value.trim());
+        LS.set('server', els.server.value.trim() || 'https://ntfy.sh');
+        LS.set('lang', els.lang.value.trim() || 'de-DE');
+        refreshPill();
+        setStatus('Einstellungen gespeichert.', 'ok');
+        els.settings.open = false;
+      });
+      els.topic.addEventListener('input', refreshPill);
+    }
+
+    loadConfig();
+    bind();
+    setupDictation();
+
+    const shared = getQueryText();
+    if (shared) {
+      els.text.value = shared;
+      setStatus('Text aus Teilen-Menü übernommen. Tippe „An Desktop senden".');
+    }
+
+    if ('serviceWorker' in navigator) {
+      navigator.serviceWorker.register('sw.js').catch(() => {});
+    }
+  </script>
+</body>
+</html>
